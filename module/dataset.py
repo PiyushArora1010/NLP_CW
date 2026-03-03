@@ -13,18 +13,21 @@ from datasets import load_from_disk
 from datasets import Dataset as HFDataset
 
 class PCLDataset(Dataset):
-    def __init__(self, load_path):
+    def __init__(self, load_path, return_embedding=True):
         self.dataset = load_from_disk(load_path)
-        self.embeddings = np.load(os.path.join(load_path, "embeddings.npy"))
-
+        self.return_embedding = return_embedding
+        if self.return_embedding:
+            self.embeddings = np.load(os.path.join(load_path, "embeddings.npy"))
+            
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
-        embedding = torch.from_numpy(self.embeddings[idx])  # faster than torch.tensor
-        label = torch.tensor(item["label"], dtype=torch.long)
-        return embedding, label
+        if self.return_embedding:
+            return self.embeddings[idx], item["label"]
+        else:
+            return item["text"], item["label"]
     
 def lastTokenPool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
     left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
@@ -38,52 +41,55 @@ def lastTokenPool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
             sequence_lengths
         ]
 
-def saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=512, batch_size=16):
+def saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=512, batch_size=16, save_embeddings=True):
     os.makedirs(save_path, exist_ok=True)
     data = getData(file_path, split_file_path)
-    task = (
-        "Determine whether the following news paragraph contains Patronizing and Condescending Language (PCL) "
-        "towards vulnerable communities such as homeless people, refugees, disabled people, migrants, or poor families. "
-        "A paragraph is patronizing if it exhibits any of these traits: "
-        "(1) Unbalanced power relations - the author distances themselves from the vulnerable group and positions themselves as having the will or responsibility to help; "
-        "(2) Shallow solution - a superficial charitable act is presented as life-changing or as solving a deep-rooted problem; "
-        "(3) Presupposition - the author makes unwarranted assumptions or stereotypes about the vulnerable group; "
-        "(4) Authority voice - the author acts as a spokesperson for the group or advises them about their own situation; "
-        "(5) Compassion - the vulnerable individual is portrayed as pitiful using flowery or emotive wording that raises pity rather than informing; "
-        "(6) Metaphor or euphemism - literary devices are used to soften or beautify a harsh situation; "
-        "(7) The poorer the merrier - vulnerability is romanticised, presenting the group as happier, stronger or more admirable because of their hardship. "
-        "A paragraph is NOT patronizing if it merely describes a harsh situation factually, or if it contains overt hate speech or offensive language."
-    )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    model.eval()
+    
+    if save_embeddings:
+        task = (
+            "Determine whether the following news paragraph contains Patronizing and Condescending Language (PCL) "
+            "towards vulnerable communities such as homeless people, refugees, disabled people, migrants, or poor families. "
+            "A paragraph is patronizing if it exhibits any of these traits: "
+            "(1) Unbalanced power relations - the author distances themselves from the vulnerable group and positions themselves as having the will or responsibility to help; "
+            "(2) Shallow solution - a superficial charitable act is presented as life-changing or as solving a deep-rooted problem; "
+            "(3) Presupposition - the author makes unwarranted assumptions or stereotypes about the vulnerable group; "
+            "(4) Authority voice - the author acts as a spokesperson for the group or advises them about their own situation; "
+            "(5) Compassion - the vulnerable individual is portrayed as pitiful using flowery or emotive wording that raises pity rather than informing; "
+            "(6) Metaphor or euphemism - literary devices are used to soften or beautify a harsh situation; "
+            "(7) The poorer the merrier - vulnerability is romanticised, presenting the group as happier, stronger or more admirable because of their hardship. "
+            "A paragraph is NOT patronizing if it merely describes a harsh situation factually, or if it contains overt hate speech or offensive language."
+        )
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        model.eval()
 
-    def addInstruction(text):
-        return f'Instruct: {task}\nQuery:{text}'
-        # return text
+        def addInstruction(text):
+            return f'Instruct: {task}\nQuery:{text}'
+            # return text
 
-    all_embeddings = []
-    for i in range(0, len(data), batch_size):
-        batch = data[i:i+batch_size]
-        texts = [addInstruction(item["text"]) for item in batch]
-        batch_dict = tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=max_length,
-            return_tensors="pt",
-        ).to(device)
-        with torch.no_grad(), torch.amp.autocast(device_type=device.type):
-            outputs = model(**batch_dict)
-        embeddings = lastTokenPool(outputs.last_hidden_state, batch_dict["attention_mask"])
-        all_embeddings.append(embeddings.cpu().numpy())
-        print(f"Processed {i + len(batch)} / {len(data)} samples")
 
-    all_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, hidden_dim)
-    np.save(os.path.join(save_path, "embeddings.npy"), all_embeddings)
+        all_embeddings = []
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i+batch_size]
+            texts = [addInstruction(item["text"]) for item in batch]
+            batch_dict = tokenizer(
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt",
+            ).to(device)
+            with torch.no_grad(), torch.amp.autocast(device_type=device.type):
+                outputs = model(**batch_dict)
+            embeddings = lastTokenPool(outputs.last_hidden_state, batch_dict["attention_mask"])
+            all_embeddings.append(embeddings.cpu().numpy())
+            print(f"Processed {i + len(batch)} / {len(data)} samples")
 
-    for item in data:
-        item.pop("embedding", None)  # remove if exists
+        all_embeddings = np.concatenate(all_embeddings, axis=0)  # (N, hidden_dim)
+        np.save(os.path.join(save_path, "embeddings.npy"), all_embeddings)
+
+        for item in data:
+            item.pop("embedding", None)  # remove if exists
     
     dataset = HFDataset.from_list(data)
     dataset = dataset.select_columns(["id", "text", "label"])

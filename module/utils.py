@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import pandas as pd
 
 def getData(file_path, split_file_path):
@@ -19,3 +22,23 @@ def getData(file_path, split_file_path):
     
     data = [d for d in data if d["id"] in split_ids]
     return data
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2, alpha=None):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha  # tensor like [w0, w1] or None
+
+    def forward(self, logits, targets):
+        ce_loss = F.cross_entropy(logits, targets, reduction='none')
+
+        # pt = probability of the true class
+        pt = torch.exp(-ce_loss)
+
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+
+        if self.alpha is not None:
+            at = self.alpha.gather(0, targets)
+            focal_loss = at * focal_loss
+
+        return focal_loss.mean()
