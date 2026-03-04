@@ -25,7 +25,7 @@ class ResidualMLPClassifier(nn.Module):
         self,
         input_dim,
         num_classes,
-        bottleneck_dim=256,
+        bottleneck_dim=512,
         dropout=0.1,
         use_residual=True,
     ):
@@ -39,7 +39,7 @@ class ResidualMLPClassifier(nn.Module):
         self.fc1 = nn.Linear(input_dim, bottleneck_dim)
         self.fc2 = nn.Linear(bottleneck_dim, input_dim)
 
-        self.act = nn.GELU()
+        self.act = nn.LeakyReLU(0.2)    
         self.dropout = nn.Dropout(dropout)
 
         self.classifier = nn.Linear(input_dim, num_classes)
@@ -61,6 +61,23 @@ class ResidualMLPClassifier(nn.Module):
 
         logits = self.classifier(hidden)
         return logits
+
+    def features(self, x):
+        residual = self.norm_in(x)
+
+        hidden = self.fc1(residual)
+        hidden = self.act(hidden)
+        hidden = self.dropout(hidden)
+
+        hidden = self.fc2(hidden)
+        hidden = self.dropout(hidden)
+
+        if self.use_residual:
+            hidden = hidden + residual
+
+        hidden = self.norm_out(hidden)
+
+        return hidden
 
 model_registry = {
     "mlp": MLP,

@@ -6,9 +6,9 @@ from torch import Tensor
 import os
 import numpy as np
 try:
-    from module.utils import getData
+    from module.utils import getData, getTestData
 except:
-    from utils import getData
+    from utils import getData, getTestData
 from datasets import load_from_disk
 from datasets import Dataset as HFDataset
 
@@ -41,9 +41,14 @@ def lastTokenPool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
             sequence_lengths
         ]
 
-def saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=512, batch_size=16, save_embeddings=True):
+def saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=512, batch_size=16, save_embeddings=True, split="train"):
     os.makedirs(save_path, exist_ok=True)
-    data = getData(file_path, split_file_path)
+    if split == "train":
+        data = getData(file_path, split_file_path)
+    elif split == "val":
+        data = getData(file_path, split_file_path)
+    elif split == "test":
+        data = getTestData("")
     
     if save_embeddings:
         task = (
@@ -65,8 +70,6 @@ def saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_l
 
         def addInstruction(text):
             return f'Instruct: {task}\nQuery:{text}'
-            # return text
-
 
         all_embeddings = []
         for i in range(0, len(data), batch_size):
@@ -101,16 +104,19 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-8B', padding_side='left')
     model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-8B')
     
-# "data/NLPLabs-2024/Dont_Patronize_Me_Trainingset/dontpatronizeme_pcl.tsv", "data/dontpatronizeme/semeval-2022/practice splits/train_semeval_parids-labels.csv"
+    save_path = ""
+    split_file_path = None
+    saveHFDataset(None, split_file_path, tokenizer, model, save_path, max_length=1024, batch_size=2, split="test")
     
-    # file_path = "/rds/general/user/pa524/home/nlp_cw/data/NLPLabs-2024/Dont_Patronize_Me_Trainingset/dontpatronizeme_pcl.tsv"
-    # split_file_path = "/rds/general/user/pa524/home/nlp_cw/data/dontpatronizeme/semeval-2022/practice splits/dev_semeval_parids-labels.csv"
-    # save_path = "/rds/general/user/pa524/home/nlp_cw/data/processed/val_dataset"
+    file_path = ""
+    split_file_path = ""
+    save_path = ""
     
-    # saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=2048, batch_size=4)
+    saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=1024, batch_size=2, split="val")
     
-    file_path = "/rds/general/user/pa524/home/nlp_cw/data/NLPLabs-2024/Dont_Patronize_Me_Trainingset/dontpatronizeme_pcl.tsv"
-    split_file_path = "/rds/general/user/pa524/home/nlp_cw/data/dontpatronizeme/semeval-2022/practice splits/train_semeval_parids-labels.csv"
-    save_path = "/rds/general/user/pa524/home/nlp_cw/data/processed/train_dataset"
+    file_path = ""
+    split_file_path = ""
+    save_path = ""
     
-    saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=2048, batch_size=2)
+    saveHFDataset(file_path, split_file_path, tokenizer, model, save_path, max_length=1024, batch_size=2, split="train")
+    

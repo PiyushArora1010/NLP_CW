@@ -23,6 +23,21 @@ def getData(file_path, split_file_path):
     data = [d for d in data if d["id"] in split_ids]
     return data
 
+def getTestData(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        data = file.readlines()
+
+    data = [line.strip().split('\t') for line in data]
+    data = [
+        {
+            "id": int(line[0].split("_")[1]),
+            "text": str(line[4]),
+            "label": 0
+        }
+        for line in data
+    ]
+    return data
+
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2, alpha=None):
         super().__init__()

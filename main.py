@@ -7,30 +7,20 @@ from trainer import Trainer
 
 parser = argparse.ArgumentParser(description="Train a model for patronizing language detection")
 
-# Task
-parser.add_argument("--task", type=str, default="train_mlp", choices=["train_mlp", "train_qwen"])
-
 # Dataset
-parser.add_argument("--train_data_path", type=str, default="data/processed/train_dataset")
-parser.add_argument("--val_data_path", type=str, default="data/processed/val_dataset")
+parser.add_argument("--train_data_path", type=str, default="data/processed/train_dataset_final")
+parser.add_argument("--val_data_path", type=str, default="data/processed/val_dataset_final")
 
 # Model
-parser.add_argument("--model_name", type=str, default="mlp")
+parser.add_argument("--model_name", type=str, default="residual_mlp")
 parser.add_argument("--input_dim", type=int, default=4096)
 parser.add_argument("--num_classes", type=int, default=2)
-parser.add_argument("--max_length", type=int, default=512)
-
-# LoRA
-parser.add_argument("--lora", action="store_true")
-parser.add_argument("--lora_rank", type=int, default=8)
-parser.add_argument("--lora_alpha", type=int, default=16)
-parser.add_argument("--lora_dropout", type=float, default=0.1)
 
 # Training
 parser.add_argument("--optimizer_name", type=str, default="adam")
 parser.add_argument("--lr", type=float, default=1e-4)
-parser.add_argument("--weight_decay", type=float, default=1e-5)
-parser.add_argument("--batch_size", type=int, default=64)
+parser.add_argument("--weight_decay", type=float, default=0)
+parser.add_argument("--batch_size", type=int, default=512)
 parser.add_argument("--epochs", type=int, default=100)
 
 # Saving and Logging
